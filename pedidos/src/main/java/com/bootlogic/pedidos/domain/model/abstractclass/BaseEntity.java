@@ -3,6 +3,9 @@ package com.bootlogic.pedidos.domain.model.abstractclass;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -24,14 +27,16 @@ public abstract class BaseEntity {
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
+    @CreationTimestamp
     private LocalDateTime createdAt;
 
     @LastModifiedDate
     @Column(nullable = false)
+    @UpdateTimestamp
     private LocalDateTime updatedAt;
 
     @CreatedBy
-    @Column(updatable = false)
+    // @Column(updatable = false)
     private String createdBy;
 
     @LastModifiedBy
