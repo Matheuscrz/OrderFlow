@@ -28,7 +28,7 @@ public class Order extends BaseEntity {
     @Column (nullable = false)
     private OrderStatus status = OrderStatus.CREATED;
 
-    @Column (nullable = false)
+    @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
     @OneToMany (mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)

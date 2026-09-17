@@ -27,7 +27,7 @@ public class OrderItem extends BaseEntity {
     @Column(nullable = false)
     private Integer quantity;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
     @ManyToOne(fetch = FetchType.LAZY)
