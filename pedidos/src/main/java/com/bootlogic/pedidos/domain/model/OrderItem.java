@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Entity
 @Table(name = "order_items")
@@ -18,7 +19,7 @@ import java.math.BigDecimal;
 public class OrderItem extends BaseEntity {
 
     @Column(nullable = false)
-    private String productId;
+    private UUID productId;
 
     @Column(nullable = false)
     private String name;
