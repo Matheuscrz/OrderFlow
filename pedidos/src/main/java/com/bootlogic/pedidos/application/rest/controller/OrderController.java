@@ -1,6 +1,7 @@
 package com.bootlogic.pedidos.application.rest.controller;
 
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bootlogic.pedidos.application.rest.dto.OrderCreate;
@@ -10,22 +11,38 @@ import com.bootlogic.pedidos.domain.model.Order;
 import com.bootlogic.pedidos.domain.model.OrderItem;
 import com.bootlogic.pedidos.domain.ports.in.CreateOrderUseCase;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping("/orders")
 @RequiredArgsConstructor
+@Tag(name = "Pedidos", description = "API para gerenciamento do ciclo de vida dos pedidos")
 public class OrderController {
 
     private final CreateOrderUseCase createOrderUseCase;
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Cria um novo pedido", description = "Recebe os dados do cliente e os itens para gerar um novo pedido no sistema.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Pedido criado com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Dados da requisição inválidos",
+                    content = @Content)
+    })
     public OrderResponse create(@RequestBody @Valid OrderCreate request) {
         Order order = toDomain(request);
         Order savedOrder = createOrderUseCase.execute(order);
