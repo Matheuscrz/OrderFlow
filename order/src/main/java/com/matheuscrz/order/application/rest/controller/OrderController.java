@@ -48,18 +48,21 @@ public class OrderController {
     }
 
     private Order toDomain(OrderCreate request) {
-        Order order = new Order();
-        order.setCustomerId(request.customerId());
-
-        request.items().forEach(item -> {
-            OrderItem orderItem = new OrderItem();
-            orderItem.setProductId(item.productId());
-            orderItem.setName(item.name());
-            orderItem.setQuantity(item.quantity());
-            orderItem.setPrice(item.price());
-            order.addItem(orderItem);
-        });
-        return order;
+       List<OrderItem> items = request.items().stream()
+                .map(item -> new OrderItem(
+                        item.productId(),
+                        item.name(),
+                        item.quantity(),
+                        item.price(),
+                        null 
+                ))
+                .toList();
+        return new Order(
+                request.customerId(),
+                null,
+                null,
+                items
+        );
     }
 
     private OrderResponse toResponse(Order order) {

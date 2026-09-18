@@ -9,18 +9,15 @@ import com.matheuscrz.order.domain.model.abstractclass.BaseEntity;
 import com.matheuscrz.order.domain.model.enums.OrderStatus;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "orders")
 @Getter
-@Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class Order extends BaseEntity {
+
     @Column(nullable = false)
     private UUID customerId;
 
@@ -34,8 +31,24 @@ public class Order extends BaseEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 
+    public Order(UUID customerId, OrderStatus status, BigDecimal totalAmount, List<OrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("O pedido não pode ser vazio.");
+        }
+        
+        this.customerId = customerId;
+        this.status = status != null ? status : OrderStatus.CREATED;
+        
+        items.forEach(this::addItem);
+    }
+
+    public void setCustomerId(UUID customerId) {
+        this.customerId = customerId;
+    }
+
     public void addItem(OrderItem item) {
-        items.add(item);
+        if (item == null) return;
+        this.items.add(item);
         item.setOrder(this);
         calculateTotalAmount();
     }
@@ -43,6 +56,6 @@ public class Order extends BaseEntity {
     private void calculateTotalAmount() {
         this.totalAmount = items.stream()
                 .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-                .reduce(BigDecimal.ZERO, (subtotal, amount) -> subtotal.add(amount));
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }
