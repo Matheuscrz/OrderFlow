@@ -1,22 +1,27 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: postgres
+    container_name: orderflow-postgres
     environment:
-      POSTGRES_USER: orderflow
-      POSTGRES_PASSWORD: orderflow
-      POSTGRES_DB: orderflow
+      POSTGRES_USER: orderflow_admin
+      POSTGRES_PASSWORD: orderflow_admin
+      POSTGRES_DB: postgres
+      ORDER_DB_PASSWORD: order_service_password
+      PROCESSOR_DB_PASSWORD: processor_service_password
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U orderflow"]
+      test: ["CMD-SHELL", "pg_isready -U orderflow_admin -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   kafka:
     image: apache/kafka:latest
-    container_name: kafka
+    container_name: orderflow-kafka
     ports:
       - "9092:9092"
     environment:
@@ -41,10 +46,10 @@ services:
       timeout: 5s
       retries: 5
 
-  pedidos:
+  order:
     build:
-      context: ./pedidos
-    container_name: pedidos
+      context: ../order
+    container_name: orderflow-order
     ports:
       - "8080:8080"
     depends_on:
@@ -53,13 +58,15 @@ services:
       kafka:
         condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/orderflow
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      DB_URL: jdbc:postgresql://postgres:5432/orderflow_order
+      DB_USERNAME: order_service
+      DB_PASSWORD: order_service_password
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 
-  processamento:
+  processor:
     build:
-      context: ./processamento
-    container_name: processamento
+      context: ../processor
+    container_name: orderflow-processor
     ports:
       - "8081:8080"
     depends_on:
@@ -68,27 +75,32 @@ services:
       kafka:
         condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/orderflow
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      DB_URL: jdbc:postgresql://postgres:5432/orderflow_processor
+      DB_USERNAME: processor_service
+      DB_PASSWORD: processor_service_password
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 
   ws-adapter:
     build:
-      context: ./ws-adapter
-    container_name: ws-adapter
+      context: ../ws-adapter
+    container_name: orderflow-ws-adapter
     ports:
       - "8082:8080"
     depends_on:
       kafka:
         condition: service_healthy
     environment:
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 
   frontend:
     build:
-      context: ./frontend
-    container_name: frontend
+      context: ../frontend
+    container_name: orderflow-frontend
     ports:
       - "3000:3000"
     depends_on:
-      - pedidos
+      - order
       - ws-adapter
+
+volumes:
+  postgres_data:

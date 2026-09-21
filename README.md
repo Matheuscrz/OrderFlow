@@ -1040,8 +1040,8 @@ Docker Compose
 │
 ├── kafka
 ├── postgres
-├── pedidos
-├── processamento
+├── order
+├── process
 ├── ws-adapter
 └── frontend
 ```
