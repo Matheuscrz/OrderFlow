@@ -59,13 +59,12 @@ graph TD
 
 ### Serviços
 
-| Componente          | Responsabilidade                                                  |
-| ------------------- | ----------------------------------------------------------------- |
-| `order-service`     | API REST, catálogo, pedidos, estoque, autenticação e Outbox       |
-| `processor-service` | Consumo de eventos, simulação de pagamento e publicação de status |
-| PostgreSQL          | Fonte de verdade dos dados transacionais                          |
-| Kafka               | Comunicação assíncrona e eventos de domínio                       |
-| Redis               | Idempotência ou estado temporário, quando necessário              |
+| Componente          | Responsabilidade                                                   |
+| -------------------- | -------------------------------------------------------------------- |
+| `order-service`     | API REST, catálogo, pedidos, estoque, autenticação e Outbox         |
+| `processor-service` | Consumo de eventos, simulação de pagamento e publicação de status   |
+| PostgreSQL          | Fonte de verdade de todos os dados transacionais, incluindo idempotência |
+| Kafka               | Comunicação assíncrona e eventos de domínio                         |
 
 O projeto utiliza dois serviços para demonstrar comunicação assíncrona sem criar microserviços artificialmente.
 
@@ -98,7 +97,7 @@ sequenceDiagram
 ## Problemas e soluções
 
 | Problema                             | Solução                            |
-| ------------------------------------ | ---------------------------------- |
+| ------------------------------------ | ----------------------------------- |
 | Banco confirmado, Kafka indisponível | Transactional Outbox               |
 | Retry criando pedidos duplicados     | Idempotência                       |
 | Venda concorrente da última unidade  | `UPDATE` condicional no PostgreSQL |
@@ -137,6 +136,10 @@ Outbox Publisher
 
 A publicação possui semântica **at-least-once**. Portanto, os consumidores devem ser idempotentes.
 
+## Idempotência
+
+A chave `Idempotency-Key` é armazenada e verificada no PostgreSQL, na mesma base transacional do pedido — não em Redis. Isso evita que a criação de um pedido dependa da disponibilidade de um componente de cache para permanecer correta.
+
 ## Stack
 
 - Java 21
@@ -146,7 +149,6 @@ A publicação possui semântica **at-least-once**. Portanto, os consumidores de
 - PostgreSQL
 - Flyway
 - Apache Kafka
-- Redis, quando necessário para idempotência
 - Docker Compose
 - JUnit
 - Testcontainers
@@ -172,19 +174,6 @@ OrderFlow/
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d
-```
-
-Execute os serviços:
-
-```bash
-./gradlew :order:bootRun
-./gradlew :processor:bootRun
-```
-
-Execute os testes:
-
-```bash
-./gradlew test
 ```
 
 ## Evolução para uma arquitetura empresarial
@@ -222,6 +211,7 @@ Essa separação não faz parte da primeira versão. Ela seria justificada por:
 
 ## O que não faz parte da versão inicial
 
+- Redis, como cache ou fonte de idempotência.
 - RabbitMQ.
 - MinIO.
 - Antivírus para uploads.
