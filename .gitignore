@@ -1,7 +1,10 @@
 ### Agent ###
 Context.md
 Agents
+
+### IDE ###
 .vscode
+.idea
 
 ### Extensions ###
 .github
