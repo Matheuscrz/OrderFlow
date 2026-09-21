@@ -1,43 +1,249 @@
-# OrderFlow: E-commerce Platform
+# OrderFlow
 
-> Uma plataforma de e-commerce construída para demonstrar maturidade em engenharia de software, arquitetura de sistemas distribuídos, resiliência e segurança em profundidade.
+> Plataforma de e-commerce desenvolvida com Java e Spring Boot para demonstrar concorrência, consistência de dados e processamento assíncrono com Kafka.
 
-O OrderFlow evoluiu de um simples laboratório de Kafka para uma arquitetura baseada em microserviços pronta para produção. O foco deste projeto **não é** reinventar a roda com abstrações complexas, mas sim aplicar as ferramentas certas para os problemas certos, seguindo princípios de **Domain-Driven Design (DDD)**, **pragmatismo** e **soluções nativas**.
+## Sobre o projeto
 
-## 🎯 Objetivo do Projeto
+O OrderFlow começou como um laboratório de Kafka para processamento de pedidos. Durante a implementação, surgiram problemas comuns em sistemas distribuídos:
 
-Demonstrar domínio absoluto sobre os desafios reais de sistemas distribuídos corporativos:
-*   **Consistência de Dados:** Resolução de falhas silenciosas de dual-write utilizando o **Transactional Outbox Pattern**.
-*   **Segurança (Zero Trust):** Autenticação robusta (Argon2id, JWT HS256), Blacklist de tokens distribuída, Rate Limiting e fluxo de upload seguro com scan assíncrono.
-*   **Mensageria Híbrida:** Separação clara de responsabilidades entre **Apache Kafka** (Eventos de Domínio e core business) e **RabbitMQ** (Workflows assíncronos, auditoria e DLQs).
-*   **Resiliência e Escalabilidade:** Idempotência e Distributed Locks (Redis), concorrência leve com **Java 21 Virtual Threads**.
-*   **Qualidade:** Testes de integração infalíveis utilizando **Testcontainers** (bancos e brokers reais, sem mocks em memória).
+- O pedido pode ser salvo no banco e o evento não ser publicado.
+- Retries podem criar pedidos duplicados.
+- Duas requisições podem tentar comprar a última unidade.
+- Um consumidor pode falhar durante o processamento.
+- Serviços podem evoluir de forma independente.
 
-## 🛠️ Stack Tecnológica
+O projeto transforma esses problemas em uma aplicação funcional de e-commerce.
 
-*   **Java 21 & Spring Boot 3.x:** Core da aplicação (tirando proveito de Virtual Threads para I/O escalável).
-*   **PostgreSQL:** Banco de dados relacional principal. Utilizado com `FOR UPDATE SKIP LOCKED` para viabilizar o Outbox de forma nativa e concorrente.
-*   **Apache Kafka (KRaft):** Broker de eventos do domínio. Garante a máquina de estados do pedido (CRIADO -> PAGO -> ENVIADO) mantendo o histórico e a ordem (particionamento por `pedidoId`).
-*   **RabbitMQ:** Broker de tarefas e roteamento. Usado para envios de e-mail, logs de auditoria e fila de escaneamento de arquivos (Fire-and-forget).
-*   **Redis (Redisson/Bucket4j):** Armazenamento de estado efêmero. Responsável por Rate Limiting distribuído, Distributed Locks, Idempotência e Blacklist de JWT.
-*   **MinIO (S3 Compatible):** Storage de objetos. Armazena imagens de produtos e avatares com política de quarentena.
-*   **React + TypeScript:** Frontend consumindo as APIs e recebendo atualizações de status via WebSocket.
+O foco principal é demonstrar:
 
-## 📁 Estrutura da Documentação
+- Reserva concorrente de estoque.
+- Idempotência.
+- Kafka.
+- Transactional Outbox.
+- Processamento assíncrono.
+- Testes de integração com infraestrutura real.
 
-Para entender a fundo como a plataforma foi desenhada e como implementá-la, consulte os guias detalhados:
+## Objetivos
 
-1.  [Arquitetura e Microserviços (ARCHITECTURE.md)](ARCHITECTURE.md): Diagramas de fluxo, comunicação Kafka vs RabbitMQ e design do Outbox.
-2.  [Roadmap de Implementação (IMPLEMENTATION_ROADMAP.md)](IMPLEMENTATION_ROADMAP.md): O passo a passo (Requisitos, Épicos e Tarefas) para construir a plataforma.
+- Disponibilizar catálogo de produtos.
+- Criar pedidos por meio de checkout.
+- Reservar estoque de forma atômica.
+- Processar pedidos assincronamente.
+- Evitar inconsistências entre PostgreSQL e Kafka.
+- Validar eventos duplicados.
+- Executar toda a infraestrutura localmente com Docker Compose.
 
-## 🚀 Como Executar Localmente
+## Arquitetura da versão de portfólio
 
-Todo o ecossistema roda de forma autocontida via Docker Compose, sem dependência de cloud externa.
+```mermaid
+graph TD
+    Client[Cliente REST ou Frontend] --> Order[Order Service]
+
+    Order --> Catalog[Catálogo]
+    Order --> Orders[Pedidos]
+    Order --> Inventory[Estoque]
+    Order --> Auth[Autenticação]
+
+    Catalog --> PostgreSQL[(PostgreSQL)]
+    Orders --> PostgreSQL
+    Inventory --> PostgreSQL
+
+    Order --> Outbox[(outbox_events)]
+    Outbox --> Publisher[Outbox Publisher]
+    Publisher --> Kafka[(Apache Kafka)]
+
+    Kafka --> Processor[Processor Service]
+    Processor --> Kafka
+    Kafka --> Order
+```
+
+### Serviços
+
+| Componente          | Responsabilidade                                                  |
+| ------------------- | ----------------------------------------------------------------- |
+| `order-service`     | API REST, catálogo, pedidos, estoque, autenticação e Outbox       |
+| `processor-service` | Consumo de eventos, simulação de pagamento e publicação de status |
+| PostgreSQL          | Fonte de verdade dos dados transacionais                          |
+| Kafka               | Comunicação assíncrona e eventos de domínio                       |
+| Redis               | Idempotência ou estado temporário, quando necessário              |
+
+O projeto utiliza dois serviços para demonstrar comunicação assíncrona sem criar microserviços artificialmente.
+
+## Fluxo principal
+
+```mermaid
+sequenceDiagram
+    participant Client as Cliente
+    participant API as Order Service
+    participant DB as PostgreSQL
+    participant Outbox as Outbox Publisher
+    participant Kafka as Kafka
+    participant Processor as Processor Service
+
+    Client->>API: POST /orders
+    API->>DB: Inicia transação
+    API->>DB: Reserva estoque atomicamente
+    API->>DB: Salva pedido
+    API->>DB: Salva evento na Outbox
+    API->>DB: Commit
+    API-->>Client: 201 Created
+
+    Outbox->>DB: Busca eventos pendentes
+    Outbox->>Kafka: Publica order.created
+    Kafka->>Processor: Entrega evento
+    Processor->>Kafka: Publica payment.approved
+    Kafka->>API: Atualiza status do pedido
+```
+
+## Problemas e soluções
+
+| Problema                             | Solução                            |
+| ------------------------------------ | ---------------------------------- |
+| Banco confirmado, Kafka indisponível | Transactional Outbox               |
+| Retry criando pedidos duplicados     | Idempotência                       |
+| Venda concorrente da última unidade  | `UPDATE` condicional no PostgreSQL |
+| Evento entregue mais de uma vez      | Consumidor idempotente             |
+| Workers processando o mesmo evento   | `FOR UPDATE SKIP LOCKED`           |
+
+## Estoque concorrente
+
+A reserva utiliza uma operação atômica:
+
+```sql
+UPDATE product_inventory
+SET available_stock = available_stock - :quantity
+WHERE product_id = :productId
+  AND available_stock >= :quantity;
+```
+
+Se nenhuma linha for atualizada, o estoque é insuficiente e a API retorna `409 Conflict`.
+
+O PostgreSQL permanece como fonte de verdade. Redis não é utilizado para controlar o saldo do estoque.
+
+## Transactional Outbox
+
+O pedido e o evento são persistidos na mesma transação:
+
+```text
+BEGIN
+  INSERT INTO orders
+  INSERT INTO order_items
+  INSERT INTO outbox_events
+COMMIT
+
+Outbox Publisher
+  └── publica eventos pendentes no Kafka
+```
+
+A publicação possui semântica **at-least-once**. Portanto, os consumidores devem ser idempotentes.
+
+## Stack
+
+- Java 21
+- Spring Boot
+- Spring Data JPA
+- Spring Security
+- PostgreSQL
+- Flyway
+- Apache Kafka
+- Redis, quando necessário para idempotência
+- Docker Compose
+- JUnit
+- Testcontainers
+- OpenAPI/Swagger
+- Spring Boot Actuator
+
+## Estrutura
+
+```text
+OrderFlow/
+├── order/
+│   └── Order Service
+├── processor/
+│   └── Processor Service
+├── infra/
+│   └── Docker Compose
+├── README.md
+├── ARCHITECTURE.md
+└── IMPLEMENTATION_ROADMAP.md
+```
+
+## Execução local
 
 ```bash
-# Sobe a infraestrutura (Postgres, Kafka, RabbitMQ, Redis, MinIO)
-docker-compose -f infra/docker-compose.yml up -d
-
-# Sobe os microserviços após a infra estar health
-# (Comandos gradle omitidos para brevidade)
+docker compose -f infra/docker-compose.yml up -d
 ```
+
+Execute os serviços:
+
+```bash
+./gradlew :order:bootRun
+./gradlew :processor:bootRun
+```
+
+Execute os testes:
+
+```bash
+./gradlew test
+```
+
+## Evolução para uma arquitetura empresarial
+
+Em uma empresa maior, os módulos poderiam ser separados conforme necessidade operacional:
+
+```mermaid
+graph TD
+    Client[Web / Mobile] --> Gateway[API Gateway]
+
+    Gateway --> Auth[Identity Service]
+    Gateway --> Catalog[Catalog Service]
+    Gateway --> Order[Order Service]
+
+    Order --> Inventory[Inventory Service]
+    Order --> Payment[Payment Service]
+    Order --> Kafka[(Kafka)]
+
+    Kafka --> Notification[Notification Service]
+    Kafka --> Fulfillment[Fulfillment Service]
+    Kafka --> Analytics[Analytics]
+
+    Catalog --> CatalogDB[(Catalog DB)]
+    Order --> OrderDB[(Order DB)]
+    Inventory --> InventoryDB[(Inventory DB)]
+```
+
+Essa separação não faz parte da primeira versão. Ela seria justificada por:
+
+- Times independentes.
+- Escala diferente entre domínios.
+- Necessidades de disponibilidade distintas.
+- Deploys independentes.
+- Limites claros de ownership dos dados.
+
+## O que não faz parte da versão inicial
+
+- RabbitMQ.
+- MinIO.
+- Antivírus para uploads.
+- CQRS formal.
+- Inventory Ledger.
+- WebSocket obrigatório.
+- Serviço separado de autenticação.
+- Serviço separado de catálogo.
+- Multi-região.
+- Service mesh.
+
+Esses itens permanecem como evoluções possíveis, não como requisitos artificiais.
+
+## Estado do projeto
+
+- [x] Infraestrutura local inicial
+- [x] API inicial de pedidos
+- [x] Persistência PostgreSQL
+- [x] Publicação inicial no Kafka
+- [ ] Consumer do Processor
+- [ ] Máquina de estados
+- [ ] Idempotência de consumidores
+- [ ] Transactional Outbox
+- [ ] Testes de concorrência
+- [ ] Autenticação JWT
